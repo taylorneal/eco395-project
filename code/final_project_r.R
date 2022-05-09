@@ -5,6 +5,8 @@ library(rsample)
 library(randomForest)
 library(glmnet)
 library(gamlr)
+library(here)
+library(kableExtra)
 
 win_pct <- function(record) {
   game_numbers = as.integer(strsplit(as.character(record), "-")[[1]])
@@ -28,6 +30,8 @@ game_results = merge(game_results, team_abbreviations, by = "Team")
 game_results = game_results %>% mutate(Away_TeamID = paste(Abbreviation, 
                                                            year, sep="-"))
 game_results = select(game_results, -c(Team, Abbreviation))
+
+write.csv(game_results, paste(here(), "data", "clean", "game_results.csv", sep = "/"), row.names = FALSE)
 
 #####
 ### Advanced Stats Merging/Cleaning
@@ -57,85 +61,7 @@ advanced_stats = rename(advanced_stats, Off_eFG = eFG., Off_TOV = TOV.,
                         Off_FT_FGA = FT.FGA, Def_eFG = eFG..1, 
                         Def_TOV = TOV..1, Def_FT_FGA = FT.FGA.1)
 
-#####
-### Expanded Standings Merging/Cleaning
-#####
-
-expanded_standings = data.frame()
-
-for (year in seq(2007,2022)){
-  temp_expanded_standings = read.csv(paste("C:/Users/tneal/OneDrive/Desktop/Spring_22/python/final_project_data/expanded_standings/", 
-                                       year,".csv", sep = ""), header = TRUE)
-  
-  if (!("Oct" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$Oct = ""
-  }
-  if (!("Nov" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$Nov = ""
-  }
-  if (!("Apr" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$Apr = ""
-  }
-  if (!("May" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$May = ""
-  }
-  if (!("Jul" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$Jul = ""
-  }
-  if (!("Aug" %in% colnames(temp_expanded_standings))) {
-    temp_expanded_standings$Aug = ""
-  }
-  
-  temp_expanded_standings$year = year
-  
-  expanded_standings = rbind(expanded_standings, temp_expanded_standings)
-  
-}
-rm(temp_expanded_standings, year)
-
-expanded_standings = merge(expanded_standings, team_abbreviations, by = "Team")
-
-expanded_standings = expanded_standings %>% mutate(Home_TeamID = paste(Abbreviation, 
-                                                          year, sep="-"))
-expanded_standings$Away_TeamID = expanded_standings$Home_TeamID
-expanded_standings <- select(expanded_standings, -c(Rk, Abbreviation))
-
-expanded_standings[c("Overall","Home","Road","Pre","Post","MOV_under_3","MOV_over_10")] <- 
-  apply(expanded_standings[c("Overall","Home","Road","Pre","Post","MOV_under_3","MOV_over_10")], 
-        c(1,2), win_pct)
-
-expanded_standings = expanded_standings %>% mutate(Home_adv = Home / Road,
-                                                   Trend = Post / Pre)
-
-
-#####
-### team vs team Merging/Cleaning
-#####
-
-team_vs_team = data.frame()
-old_abbr = c("NJN", "NOK", "NOH", "SEA", "PHO", "BRK", "CHO")
-new_abbr = c("BKN", "NOP", "NOP", "OKC", "PHX", "BKN", "CHA")
-
-for (year in seq(2007,2022)){
-  temp_team_vs_team = read.csv(paste("C:/Users/tneal/OneDrive/Desktop/Spring_22/python/final_project_data/team_vs_team/", 
-                                       year,".csv", sep = ""), header = TRUE)
-  temp_replace = old_abbr %in% colnames(temp_team_vs_team)
-  temp_team_vs_team = temp_team_vs_team %>% 
-    rename_with(~ new_abbr[temp_replace], all_of(old_abbr[temp_replace]))
-  temp_team_vs_team$year = year
-  team_vs_team = rbind(team_vs_team, temp_team_vs_team)
-  
-}
-rm(temp_team_vs_team, year, old_abbr, new_abbr, temp_replace)
-
-team_vs_team = merge(team_vs_team, team_abbreviations, by = "Team")
-
-team_vs_team = team_vs_team %>% mutate(Home_TeamID = paste(Abbreviation, 
-                                                      year, sep="-"))
-
-team_vs_team[3:32] <- apply(team_vs_team[,3:32], c(1,2), win_pct)
-
-team_vs_team <- select(team_vs_team, -c(Rk, Abbreviation))
+write.csv(advanced_stats, paste(here(), "data", "clean", "advanced_stats.csv", sep = "/"), row.names = FALSE)
 
 
 #####
@@ -226,6 +152,8 @@ plot(lasso)
 print(cv.lasso)
 coef(cv.lasso, s = "lambda.min")
 #coef(lasso)[,72]
+kable(data.frame(as.matrix(cbind(coef(cv.lasso, s = "lambda.min"), coef(cv.lasso, s = "lambda.1se")))), format = "simple", 
+      col.names = c("Max AUC", "1se"), digits = 3)
 
 
 assess.glmnet(cv.lasso, newx = as.matrix(X2[7:17]), 
@@ -426,3 +354,86 @@ large_sim %>% count(NBA_Champion, sort = TRUE)
 large_sim_2021 = monte_carlo(playoff_bracket, all_matchups, 1000)
 
 large_sim_2021 %>% count(NBA_Champion, sort = TRUE)
+
+
+## Additional data utilized for testing but not included in final report
+
+#####
+### Expanded Standings Merging/Cleaning
+#####
+
+expanded_standings = data.frame()
+
+for (year in seq(2007,2022)){
+  temp_expanded_standings = read.csv(paste("C:/Users/tneal/OneDrive/Desktop/Spring_22/python/final_project_data/expanded_standings/", 
+                                           year,".csv", sep = ""), header = TRUE)
+  
+  if (!("Oct" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$Oct = ""
+  }
+  if (!("Nov" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$Nov = ""
+  }
+  if (!("Apr" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$Apr = ""
+  }
+  if (!("May" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$May = ""
+  }
+  if (!("Jul" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$Jul = ""
+  }
+  if (!("Aug" %in% colnames(temp_expanded_standings))) {
+    temp_expanded_standings$Aug = ""
+  }
+  
+  temp_expanded_standings$year = year
+  
+  expanded_standings = rbind(expanded_standings, temp_expanded_standings)
+  
+}
+rm(temp_expanded_standings, year)
+
+expanded_standings = merge(expanded_standings, team_abbreviations, by = "Team")
+
+expanded_standings = expanded_standings %>% mutate(Home_TeamID = paste(Abbreviation, 
+                                                                       year, sep="-"))
+expanded_standings$Away_TeamID = expanded_standings$Home_TeamID
+expanded_standings <- select(expanded_standings, -c(Rk, Abbreviation))
+
+expanded_standings[c("Overall","Home","Road","Pre","Post","MOV_under_3","MOV_over_10")] <- 
+  apply(expanded_standings[c("Overall","Home","Road","Pre","Post","MOV_under_3","MOV_over_10")], 
+        c(1,2), win_pct)
+
+expanded_standings = expanded_standings %>% mutate(Home_adv = Home / Road,
+                                                   Trend = Post / Pre)
+
+
+#####
+### team vs team Merging/Cleaning
+#####
+
+team_vs_team = data.frame()
+old_abbr = c("NJN", "NOK", "NOH", "SEA", "PHO", "BRK", "CHO")
+new_abbr = c("BKN", "NOP", "NOP", "OKC", "PHX", "BKN", "CHA")
+
+for (year in seq(2007,2022)){
+  temp_team_vs_team = read.csv(paste("C:/Users/tneal/OneDrive/Desktop/Spring_22/python/final_project_data/team_vs_team/", 
+                                     year,".csv", sep = ""), header = TRUE)
+  temp_replace = old_abbr %in% colnames(temp_team_vs_team)
+  temp_team_vs_team = temp_team_vs_team %>% 
+    rename_with(~ new_abbr[temp_replace], all_of(old_abbr[temp_replace]))
+  temp_team_vs_team$year = year
+  team_vs_team = rbind(team_vs_team, temp_team_vs_team)
+  
+}
+rm(temp_team_vs_team, year, old_abbr, new_abbr, temp_replace)
+
+team_vs_team = merge(team_vs_team, team_abbreviations, by = "Team")
+
+team_vs_team = team_vs_team %>% mutate(Home_TeamID = paste(Abbreviation, 
+                                                           year, sep="-"))
+
+team_vs_team[3:32] <- apply(team_vs_team[,3:32], c(1,2), win_pct)
+
+team_vs_team <- select(team_vs_team, -c(Rk, Abbreviation))

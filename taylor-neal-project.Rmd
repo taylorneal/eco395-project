@@ -1,6 +1,11 @@
 ---
 title: "ECO 395 Project: Taylor Neal"
 output: rmarkdown::pdf_document
+
+header-includes:
+ \usepackage{float}
+ \floatplacement{figure}{H}
+ \floatplacement{table}{H}
 ---
 
 ```{r setup, include = FALSE}
@@ -9,21 +14,60 @@ library(tidyverse)
 library(rpart)
 library(rpart.plot)
 library(rsample) 
-library(randomForest)
+#library(randomForest)
 library(glmnet)
 library(gamlr)
+library(kableExtra)
 
-#wine <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/wine.csv", header = TRUE)
-#social_marketing <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/social_marketing.csv", header = TRUE)
-#groceries <- readLines("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/groceries.txt")
+game_results <- read.csv("https://raw.githubusercontent.com/taylorneal/eco395-project/main/data/clean/game_results.csv", header = TRUE)
+advanced_stats <- read.csv("https://raw.githubusercontent.com/taylorneal/eco395-project/main/data/clean/advanced_stats.csv", header = TRUE)
 
+## Loading functions for use with Monte Carlo simulation of NBA brackets
+# simulates a single round of the playoffs (adds winners and next round matchups to dataframe)
+round_sim <- function(playoff_bracket, all_matchups){
+  current_round = playoff_bracket %>% filter(Winner == "")
+
+  for (i in 1:length(current_round$Team1)) {
+    current_round[current_round$Team1 == current_round[i,1] & current_round$Team2 == current_round[i,2],3] = series_winner(current_round[i,1], current_round[i,2], all_matchups)
+  }
+  for (i in seq(1,length(current_round$Team1),2)) {
+    current_round = rbind(current_round, c(current_round[i,3],current_round[i+1,3],""))
+  }
+  playoff_bracket = filter(playoff_bracket, Winner != "")
+  playoff_bracket = rbind(playoff_bracket, current_round)
+  return(playoff_bracket)
+}
+
+# simulates all rounds of the playoffs for a given year (calls on round_sim above)
+playoffs_sim <- function(playoff_bracket, all_matchups){
+  playoff_result = round_sim(playoff_bracket, all_matchups)
+  playoff_result = round_sim(playoff_result, all_matchups)
+  playoff_result = round_sim(playoff_result, all_matchups)
+  playoff_result[15,3] = series_winner(playoff_result[15,1], playoff_result[15,2],all_matchups)
+  return(playoff_result)
+}
+
+# runs Monte Carlo simulation and saves overall champion for each iteration (as well as conference champs)
+monte_carlo <- function(playoff_bracket, all_matchups, simulations) {
+  output = data.frame()
+  for (i in 1:simulations) {
+    playoff_result = playoffs_sim(playoff_bracket, all_matchups)
+    temp_output = c(playoff_result[15,3], playoff_result[14,3], playoff_result[13,3])
+    output = rbind(output, temp_output)
+    #print(i)
+  }
+  colnames(output) = c("NBA_Champion", "East_Champion", "West_Champion")
+  return(output)
+}
+
+## arbitrary seed set for reproducibility
 set.seed(9)
 ```
 
 ## 1) Abstract
 
 
-TBU
+The goal of this analysis is to determine what regular season NBA team statistics are most useful in determining which teams win in playoff match-ups. With these NBA team statistics identified, we seek to build a probabilistic model utilizing our machine learning toolbox. Leveraging a probabilistic model for playoff game outcomes will allow us to simulate a large number of potential brackets and estimate percentage chances for each NBA franchise winning the championship in a given year.
 
 
 ## 2) Introduction
@@ -42,6 +86,58 @@ TBU
 
 
 TBU
+
+```{r cv-lasso, echo = FALSE, fig.align = 'center', fig.cap = "Cross validated logistic regression - optimizing for area under the curve."}
+
+X = game_results
+
+X = X %>% mutate(Home_win = as.numeric(home_score > away_score)) %>%
+  filter(year > 2010, year != 2020)
+
+X = select(X, -c(home_score, away_score))
+
+X = merge(X, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.", "Age", "MOV", 
+                              "Home_TeamID")], by = "Home_TeamID")
+
+X = merge(X, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.", "Age", "MOV", 
+                              "Away_TeamID")], by = "Away_TeamID")
+
+X = X %>% mutate(age_diff = Age.x - Age.y) %>% select(-c(Age.x, Age.y))
+
+X[7:17] = scale(X[7:17], center = TRUE, scale = TRUE)
+
+cv.lasso = cv.glmnet(as.matrix(X[7:17]), X$Home_win, family = "binomial", 
+                     type.measure = "auc", keep = TRUE, relax = FALSE)
+
+plot(cv.lasso, main = "Cross Validated Logistic Regression")
+
+```
+
+
+TBU
+
+```{r roc, echo = FALSE, fig.align = 'center', fig.cap = "ROC curve for our optimized solution is highlighted in red."}
+
+rocs <- roc.glmnet(cv.lasso$fit.preval, newy = X$Home_win)
+best.lasso = cv.lasso$index["min",]
+
+plot(rocs[[best.lasso]], type = "l", main = "ROC Curves for Lasso Regressions")
+invisible(sapply(rocs, lines, col="grey"))
+lines(rocs[[best.lasso]], lwd = 2,col = "red")
+
+```
+
+
+TBU
+
+```{r coef-table, echo = FALSE, fig.align = 'center'}
+
+knitr::kable(data.frame(as.matrix(cbind(coef(cv.lasso, s = "lambda.min"), coef(cv.lasso, s = "lambda.1se")))), col.names = c("Max AUC", "One se"), digits = 3, format = "latex", caption = "Coefficients for our Lasso regression where area under the ROC curve is maximized and the most penalized regression within one standard error of the optimum solution.")
+
+```
+
+TBU
+
 
 
 ## 5) Conclusion
