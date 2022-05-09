@@ -21,8 +21,36 @@ library(kableExtra)
 
 game_results <- read.csv("https://raw.githubusercontent.com/taylorneal/eco395-project/main/data/clean/game_results.csv", header = TRUE)
 advanced_stats <- read.csv("https://raw.githubusercontent.com/taylorneal/eco395-project/main/data/clean/advanced_stats.csv", header = TRUE)
+expanded_standings <- read.csv("https://raw.githubusercontent.com/taylorneal/eco395-project/main/data/clean/expanded_standings.csv", header = TRUE)
+
+## Loading function to convert string records into numeric win percentages
+win_pct <- function(record) {
+  game_numbers = as.integer(strsplit(as.character(record), "-")[[1]])
+  
+  return(game_numbers[1] / sum(game_numbers))
+} 
 
 ## Loading functions for use with Monte Carlo simulation of NBA brackets
+# determines the winner of an individual series
+series_winner <- function(team1, team2, all_matchups) {
+  team1_winpct = filter(all_matchups, Home_TeamID == team1)[1,4]
+  team2_winpct = filter(all_matchups, Home_TeamID == team2)[1,4]
+  if (team1_winpct >= team2_winpct) {
+    high_seed = team1
+    low_seed = team2
+    }
+  else {
+    low_seed = team1
+    high_seed = team2
+  }
+  #print(c(team1,team2))
+  prob_1257 = filter(all_matchups, Home_TeamID == high_seed, Away_TeamID == low_seed)[3]
+  prob_346 = filter(all_matchups, Home_TeamID == low_seed, Away_TeamID == high_seed)[3]
+  series = c(prob_1257, prob_1257, 1 - prob_346, 1 - prob_346, prob_1257, 1 - prob_346, prob_1257)
+  if (sum(series >= runif(7, 0, 1)) >= 4) {return(high_seed)}
+  else {return(low_seed)}
+}
+
 # simulates a single round of the playoffs (adds winners and next round matchups to dataframe)
 round_sim <- function(playoff_bracket, all_matchups){
   current_round = playoff_bracket %>% filter(Winner == "")
