@@ -1,0 +1,50 @@
+---
+title: "ECO 395 Project: Taylor Neal"
+output: rmarkdown::pdf_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(rpart)
+library(rpart.plot)
+library(rsample) 
+library(randomForest)
+library(glmnet)
+library(gamlr)
+
+#wine <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/wine.csv", header = TRUE)
+#social_marketing <- read.csv("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/social_marketing.csv", header = TRUE)
+#groceries <- readLines("https://raw.githubusercontent.com/taylorneal/homework-4/master/data/groceries.txt")
+
+set.seed(9)
+```
+
+## 1) Abstract
+
+
+TBU
+
+
+## 2) Introduction
+
+
+TBU
+
+
+## 3) Methods
+
+
+TBU
+
+
+## 4) Results
+
+
+TBU
+
+
+## 5) Conclusion
+
+
+TBU
