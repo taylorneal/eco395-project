@@ -101,21 +101,34 @@ The goal of this analysis is to determine what regular season NBA team statistic
 ## 2) Introduction
 
 
-TBU
+In an age of increasing access to data of all kinds, sports analytics data is no exception. The primary challenge these days is figuring out what variables and measures to actually utilize when modeling an outcome of interest. There are many reasons we might have interest in using available statistics to predict outcomes in NBA playoff games. There could be incentive to place bets when Vegas odds differ substantially from a model one has confidence in. Or, it might just be a matter of ensuring your optimism levels for a favorite team are appropriately set (it is generally good to avoid crushing disappointments when possible). 
 
+Given the vast number of professional basketball advanced metrics, machine learning tools can be an effective way of sorting through what is most important to our outcome of interest (which team will win the game). This project will tackle the selection / regularization problem by settling on the best machine learning process based on cross validation. Cross validation of our model process will also allow us to determine an optimal number of years of historical NBA playoff game results to include in this analysis. 
+
+Attempts were made at utilizing principal components analysis (reducing the dimensional of our many available statistics) and random forests (collections of many tree models with each having access to a limited, random subset of the data). However, an approach utilizing cross validated logistic LASSO regression (a penalized version of a logistic regression at an optimized penalty value) was determined to be the best at modeling our probability outcome of interest, so the bulk of this report will focus on results reached through that analysis. 
+
+Upon constructing our probability model for win percentage in a given NBA playoff match-up, a Monte Carlo simulation will give us insight into what we would expect championship probabilities to be for a given year's bracket (we will show predictions of the current 2022 playoffs which are in process and 2021 to compare with the known result from last year). 
+
+For data and modeling simplicity, we will make use of team statistics from the relevant completed regular season in order to predict the probability outcomes for playoff games in a given year. While it would likely be more accurate to model team performance based on individual players to account for injuries and the constant flux of NBA rosters (similar to how fivethirtyeight.com does), that is beyond the scope of this project for the time being.
 
 ## 3) Methods
 
 
-TBU
+Our data was obtained from basketball-reference.com. The 15 most recent years of historical data were incorporated into this analysis (although only the 10 most recent years of data excluding the Covid/bubble playoff year were included in our final modeling approach). Separate data sets for team shooting, average per game stats, advanced metrics, detailed standings, team vs team records and additional opponent per game / shooting data were all considered. These datasets were available for the individual years in question. And, thus, a fair amount of data cleaning and preparation went into combining said data into a usable historical record of results and accompanying statistics. In the final model formulation, advanced metrics and detailed standings carry the load of modeling our outcomes of interest.
+
+Cross validation over 20 random iterations of our 10 years of historical data were utilized to test and determine the best modeling approaches. Two historical years were withheld from the training set in each case to test various approaches against each other. This project found that logistic LASSO regression outperformed random forests on average and offered better interpretability over the construction of a PCA analysis. Additionally, excluding the pandemic year when the playoffs were played in a bubble without any fans improved the stability of our approach.
+
+Many engineered factors were attempted to incorporate data more efficiently into our modeling process. For instance, one engineered factor that remains in the final model is a difference in average age of the two teams matched up with each other. Other interactions such as various interaction terms between one team's offense and the other's defense were not found to be impactful. Our dependent variables were normalized prior to model builing in order to have more comparable coefficients.
+
+In the upcoming section, we will dive into the results of the cross validated LASSO regression approach and see what it implies for both future and past predictions of overall champions. We will plot the LASSO solution as it varied with lambda and examine the ROC curve for the selected regression (chosen by maximizing the area under the ROC curve). We can then begin to look into our resulting coefficients to answer the question of which regular season statistics carry the most weight in predicting.
 
 
 ## 4) Results
 
 
-TBU
+Despite the vast number of statistics and advanced metrics available. We see in figure 1 (below) that only a small number of regression coefficients make it into our final model. At the maximum area under the ROC curve, we make use of 7 variables for predicting whether the home team will win their matchup (modeled this way with an intercept in order to accout for home field advantage).
 
-```{r cv-lasso, echo = FALSE, fig.align = 'center', fig.cap = "Cross validated logistic regression - optimizing for area under the curve."}
+```{r cv-lasso, echo = FALSE, fig.align = 'center', fig.cap = "Cross validated logistic LASSO regression - optimizing for area under the curve."}
 
 X = game_results
 
@@ -142,7 +155,7 @@ plot(cv.lasso, main = "Cross Validated Logistic Regression")
 ```
 
 
-TBU
+Figure 2 (below), highlights the actual ROC curve of our optimized solution. Given the inherent randomness of a game like professional basketball, it is not entirely surprising that our best curve does not incorporate more area on the plot.
 
 ```{r roc, echo = FALSE, fig.align = 'center', fig.cap = "ROC curve for our optimized solution is highlighted in red."}
 
@@ -156,7 +169,7 @@ lines(rocs[[best.lasso]], lwd = 2,col = "red")
 ```
 
 
-TBU
+In table 1 (below), we show the coefficients for our optimized solution (max AUC) and the most penalized solution within one standard error of the optimal. Note that here variables ending in .x are statistics for the home team and variables ending in .y are statistics for the away team. It is curious that there are different variables showing as important for the home vs away distinction. But this was consistent over our cross validation process. And the high correlation between many of this variables likely makes it a near equivalent choice between choosing what would be of most importance for one side to come out with a win. Note that our model is for the outcome of a home win so positive coeffients make a home win more likely and negative coefficients make a home win less likely.
 
 ```{r coef-table, echo = FALSE, fig.align = 'center'}
 
@@ -164,11 +177,131 @@ knitr::kable(data.frame(as.matrix(cbind(coef(cv.lasso, s = "lambda.min"), coef(c
 
 ```
 
-TBU
+Out Monte Carlo simulations were run 1,000 times in order to get a sizable sample of potential tournament results. We find that the model estimates Phoenix (27.6%) and Golden State (22.4%), which are both teams in the western conference, to have the best shot at a championship this year.
+
+```{r pct-table-2022, echo = FALSE, fig.align = 'center'}
+
+TeamIDs_2022 = c("ATL-2022", "BOS-2022", "CHI-2022", "DAL-2022", "DEN-2022", 
+                 "GSW-2022","MEM-2022", "MIA-2022","MIL-2022", "MIN-2022", 
+                 "BKN-2022", "NOP-2022","PHI-2022", "PHX-2022","TOR-2022", 
+                 "UTA-2022")
+
+all_matchups = data.frame()
+for (team in TeamIDs_2022) {
+  temp_matchups = data.frame(rep(team, 15), TeamIDs_2022[-match(team, TeamIDs_2022)])
+  
+  all_matchups = rbind(all_matchups, temp_matchups)
+}
+rm(temp_matchups, team)
+colnames(all_matchups) = c("Home_TeamID", "Away_TeamID")
+
+all_matchups = merge(all_matchups, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.", "Age",
+                                                    "MOV", "Home_TeamID")], by = "Home_TeamID")
+
+all_matchups = merge(all_matchups, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.",
+                                                    "Age",
+                                                    "MOV","Away_TeamID")], 
+                     by = "Away_TeamID")
 
 
+all_matchups = all_matchups %>% mutate(age_diff = Age.x - Age.y) %>% select(-c(Age.x, Age.y))
+
+all_matchups = merge(all_matchups, expanded_standings[c("Overall","Home_TeamID")], 
+                     by = "Home_TeamID")
+
+all_matchups = merge(all_matchups, expanded_standings[c("Overall","Away_TeamID")], 
+                     by = "Away_TeamID")
+
+all_matchups[3:13] = scale(all_matchups[3:13], center = TRUE, scale = TRUE)
+
+
+pred = predict(cv.lasso, newx = as.matrix(all_matchups[3:13]), s = "lambda.min", 
+               type = "response")
+
+all_matchups$Home_win_prob = pred
+
+all_matchups = all_matchups %>% select(Home_TeamID, Away_TeamID, Home_win_prob, Overall.x, Overall.y) %>%
+  arrange(Home_TeamID, Away_TeamID)
+
+playoff_bracket = data.frame(c("PHX-2022", "DAL-2022", "GSW-2022", "MEM-2022", "MIA-2022", "PHI-2022", 
+                               "MIL-2022", "BOS-2022"), c("NOP-2022", "UTA-2022", "DEN-2022", "MIN-2022", "ATL-2022", "TOR-2022", 
+                                                          "CHI-2022", "BKN-2022"), rep("",8))
+
+colnames(playoff_bracket) = c("Team1", "Team2", "Winner")
+
+large_sim = monte_carlo(playoff_bracket, all_matchups, 1000)
+
+champ = large_sim %>% count(NBA_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(NBA_Champion, Win_percentage)
+east = large_sim %>% count(East_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(East_Champion, Win_percentage)
+west = large_sim %>% count(West_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(West_Champion, Win_percentage)
+knitr::kable(list(champ,east,west), caption = "Monte Carlo results for 2022 playoffs.")
+
+```
+
+The table below (table 3) allows us to look at the predicted results prior to the playoffs from last year (which notably featured many wild games and series upsets). Utah (which has a phenomenal statistical regular season) was a huge favorite to win the title (43%) based on this model but they ended up losing in the second round.
+
+```{r pct-table-2021, echo = FALSE, fig.align = 'center'}
+
+TeamIDs_2021 = c("UTA-2021", "MEM-2021", "LAC-2021", "DAL-2021", "DEN-2021", 
+                 "POR-2021","LAL-2021", "PHI-2021","WAS-2021", "NYK-2021", 
+                 "ATL-2021", "MIL-2021","MIA-2021", "BKN-2021","BOS-2021", 
+                 "PHX-2021")
+
+all_matchups = data.frame()
+for (team in TeamIDs_2021) {
+  temp_matchups = data.frame(rep(team, 15), TeamIDs_2021[-match(team, TeamIDs_2021)])
+  
+  all_matchups = rbind(all_matchups, temp_matchups)
+}
+rm(temp_matchups, team)
+colnames(all_matchups) = c("Home_TeamID", "Away_TeamID")
+
+all_matchups = merge(all_matchups, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.", "Age",
+                                                    "MOV", "Home_TeamID")], by = "Home_TeamID")
+
+all_matchups = merge(all_matchups, advanced_stats[c("SRS", "ORtg", "DRtg", "TS.",
+                                                    "Age",
+                                                    "MOV","Away_TeamID")], 
+                     by = "Away_TeamID")
+
+
+all_matchups = all_matchups %>% mutate(age_diff = Age.x - Age.y) %>% select(-c(Age.x, Age.y))
+
+all_matchups = merge(all_matchups, expanded_standings[c("Overall","Home_TeamID")], 
+                     by = "Home_TeamID")
+
+all_matchups = merge(all_matchups, expanded_standings[c("Overall","Away_TeamID")], 
+                     by = "Away_TeamID")
+
+all_matchups[3:13] = scale(all_matchups[3:13], center = TRUE, scale = TRUE)
+
+
+pred = predict(cv.lasso, newx = as.matrix(all_matchups[3:13]), s = "lambda.min", 
+               type = "response")
+
+all_matchups$Home_win_prob = pred
+
+all_matchups = all_matchups %>% select(Home_TeamID, Away_TeamID, Home_win_prob, Overall.x, Overall.y) %>%
+  arrange(Home_TeamID, Away_TeamID)
+
+playoff_bracket = data.frame(c("UTA-2021", "LAC-2021", "DEN-2021", "PHX-2021", "PHI-2021", "NYK-2021", 
+                               "MIL-2021", "BKN-2021"), c("MEM-2021", "DAL-2021", "POR-2021", "LAL-2021", "WAS-2021", "ATL-2021", 
+                                                          "MIA-2021", "BOS-2021"), rep("",8))
+
+colnames(playoff_bracket) = c("Team1", "Team2", "Winner")
+
+large_sim = monte_carlo(playoff_bracket, all_matchups, 1000)
+
+champ = large_sim %>% count(NBA_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(NBA_Champion, Win_percentage)
+east = large_sim %>% count(East_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(East_Champion, Win_percentage)
+west = large_sim %>% count(West_Champion, sort = TRUE) %>% mutate(Win_percentage = n / 1000) %>% select(West_Champion, Win_percentage)
+knitr::kable(list(champ,east,west), caption = "Monte Carlo results for 2021 playoffs.")
+
+```
 
 ## 5) Conclusion
 
 
-TBU
+Based on our results above, it appears that the advanced stats best at predicting playoff match-ups are: SRS (simple rating system - which account for point differential and strength of opponents), ORtg (offensive rating - points per 100 possessions), true shooting percentage (TS), average margin of victory (MOV) and average age differential. Most of the signs appear to make logical sense (with the exception of the coefficient on ORtg of the home team being negative). And it is interesting to note that an older average team age is adding to the likelihood of victory (likely picking up on a component of playoff experience).
+
+Upon inspection of our optimized ROC plot and the less than impressive predictions for the 2021 playoffs (with Utah being showing up as too much of a favorite that year to be reasonable). Utilizing regular season NBA stats for the same year does not appear to do a great job of modeling the outcomes in the NBA playoffs. This might be due to the inherent randomness in professional basketball, but it is likely that a more detailed player-centric approach to modeling this problem could yield greater results in the future.
